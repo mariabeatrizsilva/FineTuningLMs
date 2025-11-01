@@ -182,7 +182,7 @@ if __name__ == "__main__":
         "imdb",
         # download_mode="force_redownload",
         verification_mode="no_checks"  # Added these to make an error go away
-
+    )
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
     # Prepare dataset for use by model
