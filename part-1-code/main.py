@@ -28,6 +28,8 @@ def tokenize_function(examples):
 
 # Core training function
 def do_train(args, model, train_dataloader, save_dir="./out"):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
     optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     num_epochs = args.num_epochs
     num_training_steps = num_epochs * len(train_dataloader)
@@ -36,17 +38,33 @@ def do_train(args, model, train_dataloader, save_dir="./out"):
     )
     model.train()
     progress_bar = tqdm(range(num_training_steps))
+    criterion = torch.nn.CrossEntropyLoss()
 
     ################################
     ##### YOUR CODE BEGINGS HERE ###
-
-    # Implement the training loop --- make sure to use the optimizer and lr_sceduler (learning rate scheduler)
-    # Remember that pytorch uses gradient accumumlation so you need to use zero_grad (https://pytorch.org/tutorials/recipes/recipes/zeroing_out_gradients.html)
-    # You can use progress_bar.update(1) to see the progress during training
-    # You can refer to the pytorch tutorial covered in class for reference
-
-    raise NotImplementedError
-
+    for epoch in range(num_epochs): 
+        # epoch_loss = 0.0
+        for i, data in enumerate (train_dataloader):
+            # print("THIS IS DATA: \n", data)
+            labels = data['labels']
+            input_ids = data['input_ids']
+            attention_mask = data['attention_mask']
+            labels = labels.to(device)
+            input_ids = input_ids.to(device)
+            attention_mask = attention_mask.to(device)
+        
+            optimizer.zero_grad()
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            loss =  criterion(outputs.logits, labels)
+            loss.backward()
+            optimizer.step()
+            # epoch_loss += loss.item()
+            progress_bar.update(1)
+            # if i % 50 == 0:    
+            #     print('[%d, %5d] loss: %.3f' %
+            #         (epoch + 1, i + 1, loss.item()))
+        lr_scheduler.step()
+        # print(f"FINAL EPOCH LOSS: {epoch_loss}")
     ##### YOUR CODE ENDS HERE ######
 
     print("Training completed...")
@@ -158,7 +176,13 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
     # Tokenize the dataset
-    dataset = load_dataset("imdb")
+    # dataset = load_dataset("imdb")
+        # Tokenize the dataset
+    dataset = load_dataset(
+        "imdb",
+        # download_mode="force_redownload",
+        verification_mode="no_checks"  # Added these to make an error go away
+
     tokenized_dataset = dataset.map(tokenize_function, batched=True)
 
     # Prepare dataset for use by model
