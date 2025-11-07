@@ -52,18 +52,20 @@ def do_train(args, model, train_dataloader, save_dir="./out"):
             labels = labels.to(device)
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
-        
-            optimizer.zero_grad()
+
+            
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             loss =  criterion(outputs.logits, labels)
             loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
+            lr_scheduler.step()
             # epoch_loss += loss.item()
             progress_bar.update(1)
             # if i % 50 == 0:    
             #     print('[%d, %5d] loss: %.3f' %
             #         (epoch + 1, i + 1, loss.item()))
-        lr_scheduler.step()
+
         # print(f"FINAL EPOCH LOSS: {epoch_loss}")
     ##### YOUR CODE ENDS HERE ######
 
