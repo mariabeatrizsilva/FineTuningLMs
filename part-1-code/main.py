@@ -105,16 +105,24 @@ def do_eval(eval_dataloader, output_dir, out_file):
 
 
 # Created a dataladoer for the augmented training dataset
-def create_augmented_dataloader(args, dataset):
+def create_augmented_dataloader(args, dataset, num_augmented = 5000):
     ################################
     ##### YOUR CODE BEGINGS HERE ###
-
+    # augmented_data = dataset_to_augment.map(custom_transform, load_from_cache_file=False)
     # Here, 'dataset' is the original dataset. You should return a dataloader called 'train_dataloader' -- this
     # dataloader will be for the original training split augmented with 5k random transformed examples from the training set.
     # You may find it helpful to see how the dataloader was created at other place in this code.
+    original_dataset = dataset["train"].shuffle(seed=42)
+    examples_to_augment = original_dataset.select(range(num_augmented))
+    augmented_examples = examples_to_augment.map(custom_transform, load_from_cache_file=False)
+    augmented_dataset = datasets.concatenate_datasets([original_dataset, augmented_examples])
+    augmented_tokenized_dataset = augmented_dataset.map(tokenize_function, batched=True, load_from_cache_file=False)
+    augmented_tokenized_dataset = augmented_tokenized_dataset.remove_columns(["text"])
+    augmented_tokenized_dataset = augmented_tokenized_dataset.rename_column("label", "labels")
+    augmented_tokenized_dataset.set_format("torch")
 
-    raise NotImplementedError
-
+    transformed_val_dataset = augmented_tokenized_dataset
+    train_dataloader = DataLoader(transformed_val_dataset, batch_size=args.batch_size)
     ##### YOUR CODE ENDS HERE ######
 
     return train_dataloader
