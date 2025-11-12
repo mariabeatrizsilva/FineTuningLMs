@@ -116,6 +116,11 @@ def create_augmented_dataloader(args, dataset, num_augmented = 5000):
     examples_to_augment = original_dataset.select(range(num_augmented))
     augmented_examples = examples_to_augment.map(custom_transform, load_from_cache_file=False)
     augmented_dataset = datasets.concatenate_datasets([original_dataset, augmented_examples])
+    print("CHECKING TRANSFORM ________ \n First example (should be original):")
+    print(augmented_dataset[0])
+    print("\n")
+    print(f"Example at index {len(original_dataset)} (should be transformed):")
+    print(augmented_dataset[len(original_dataset)])
     augmented_tokenized_dataset = augmented_dataset.map(tokenize_function, batched=True, load_from_cache_file=False)
     augmented_tokenized_dataset = augmented_tokenized_dataset.remove_columns(["text"])
     augmented_tokenized_dataset = augmented_tokenized_dataset.rename_column("label", "labels")
@@ -123,6 +128,8 @@ def create_augmented_dataloader(args, dataset, num_augmented = 5000):
 
     train_dataloader = DataLoader(augmented_tokenized_dataset, batch_size=args.batch_size)
     ##### YOUR CODE ENDS HERE ######
+    print(f"Original train size: {len(dataset['train'])}")
+    print(f"Augmented dataset size: {len(augmented_dataset)}")
 
     return train_dataloader
 
