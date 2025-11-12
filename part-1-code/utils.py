@@ -17,7 +17,6 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 random.seed(0)
 
 # this is used to split transformations (half get typo half get synonym)
-transform_counter = 0
 
 """ Setup for letter replacement  """
 ## I wrote the first 5 letters and adjacent chars on my own, then asked gemini to do the rest 
@@ -50,6 +49,39 @@ close_letters = {
     'y': ['6', '7', 't', 'g', 'h', 'u'],
     'z': ['a', 's', 'x'],
 }
+
+letter_number_subs = {
+        'o': '0',
+        'i': '1', 
+        'l': '1',
+        'e': '3',
+        'a': '@',
+        's': '$',
+        't': '7',
+        'g': '9'
+    }
+
+def substitute_common_letters(text: str, sub_rate: float = 0.05) -> str:
+    words = text.split()
+    result = []
+    
+    for word in words:
+        # skip words that already contain numbers
+        if any(char.isdigit() for char in word):
+            result.append(word)
+            continue
+        
+        result_chars = []
+        for char in word:
+            if char.lower() in letter_number_subs and random.random() < sub_rate:
+                result_chars.append(letter_number_subs[char.lower()])
+            else:
+                result_chars.append(char)
+        
+        result.append(''.join(result_chars))
+    
+    return ' '.join(result)
+
 
 def choose_typo(char: str) -> str:
     char_lower = char.lower()
@@ -97,7 +129,7 @@ def get_synonym(word: str) -> str:
     for lemma in synset.lemmas():
         synonym = lemma.name().replace('_', ' ')
         # don't replace word with itself
-        if synonym.lower() != word.lower():
+        if synonym.lower() != word.lower() and ' ' not in synonym and synonym.islower():
             synonyms.append(synonym)
     
     # pick random synonym if found in the sysnet
@@ -125,24 +157,6 @@ def replace_with_synonyms(text: str, replacement_rate: float = 0.15) -> str:
     
     return ' '.join(words)
 
-
-def example_transform(example):
-    example["text"] = example["text"].lower()
-    return example
-
-
-### Rough guidelines --- typos
-# For typos, you can try to simulate nearest keys on the QWERTY keyboard for some of the letter (e.g. vowels)
-# You can randomly select each word with some fixed probability, and replace random letters in that word with one of the
-# nearest keys on the keyboard. You can vary the random probablity or which letters to use to achieve the desired accuracy.
-
-
-### Rough guidelines --- synonym replacement
-# For synonyms, use can rely on wordnet (already imported here). Wordnet (https://www.nltk.org/howto/wordnet.html) includes
-# something called synsets (which stands for synonymous words) and for each of them, lemmas() should give you a possible synonym word.
-# You can randomly select each word with some fixed probability to replace by a synonym.
-
-
 def custom_transform(example):
     ################################
     ##### YOUR CODE BEGINGS HERE ###
@@ -151,16 +165,11 @@ def custom_transform(example):
     # how you could implement two of them --- synonym replacement and typos.
 
     # You should update example["text"] using your transformation
-    global transform_counter
-    
-    if transform_counter % 2 == 0:
-        # Apply keyboard-based typo transformation
-        example["text"] = add_typos(example["text"], typo_rate=0.03)
-    else:
-        # Apply synonym replacement
-        example["text"] = replace_with_synonyms(example["text"], replacement_rate=0.15)
-    
-    transform_counter += 1
+    replaced = replace_with_synonyms(example["text"], replacement_rate=0.20)
+    typoed = add_typos(replaced, typo_rate=0.03)
+    subbed = substitute_common_letters(typoed, sub_rate=0.05)
+
+    example["text"] = subbed
     ##### YOUR CODE ENDS HERE ######
 
     return example
