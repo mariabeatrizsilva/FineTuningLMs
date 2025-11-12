@@ -16,7 +16,6 @@ from nltk.tokenize.treebank import TreebankWordDetokenizer
 
 random.seed(0)
 
-# this is used to split transformations (half get typo half get synonym)
 
 """ Setup for letter replacement  """
 ## I wrote the first 5 letters and adjacent chars on my own, then asked gemini to do the rest 
