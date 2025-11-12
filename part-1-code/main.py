@@ -121,8 +121,7 @@ def create_augmented_dataloader(args, dataset, num_augmented = 5000):
     augmented_tokenized_dataset = augmented_tokenized_dataset.rename_column("label", "labels")
     augmented_tokenized_dataset.set_format("torch")
 
-    transformed_val_dataset = augmented_tokenized_dataset
-    train_dataloader = DataLoader(transformed_val_dataset, batch_size=args.batch_size)
+    train_dataloader = DataLoader(augmented_tokenized_dataset, batch_size=args.batch_size)
     ##### YOUR CODE ENDS HERE ######
 
     return train_dataloader
