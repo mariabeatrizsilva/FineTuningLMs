@@ -50,7 +50,7 @@ def create_prompt(sentence, k):
     # TODO
 
 
-def exp_kshot(tokenizer, model, inputs, k):
+def exp_kshot(tokenizer, model, inputs, k, MAX_NEW_TOKENS=100): ##EDIT MAX_NEW_TOKENS!!!!
     '''
     k-shot prompting experiments using the provided model and tokenizer. 
     This function generates SQL queries from text prompts and evaluates their accuracy.
