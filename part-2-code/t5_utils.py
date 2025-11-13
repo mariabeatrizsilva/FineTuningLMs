@@ -8,7 +8,7 @@ from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 import wandb
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
+MODEL = 'google-t5/t5-small'
 def setup_wandb(args):
     # Implement this if you wish to use wandb in your experiments
     pass
@@ -20,7 +20,17 @@ def initialize_model(args):
     or training a T5 model initialized with the 'google-t5/t5-small' config
     from scratch.
     '''
-    pass
+    if args.finetune:
+        print("loading pretrained model")
+        model = T5ForConditionalGeneration.from_pretrained(MODEL)
+    else:
+        print("loading not pretrained model")
+        config = T5Config.from_pretrained(MODEL)
+        model = T5ForConditionalGeneration(config)
+
+    model = model.to(DEVICE)
+    print(f"model loaded on {DEVICE}")
+    return model
 
 def mkdir(dirpath):
     if not os.path.exists(dirpath):
@@ -31,11 +41,29 @@ def mkdir(dirpath):
 
 def save_model(checkpoint_dir, model, best):
     # Save model checkpoint to be able to load the model later
-    pass
+    mkdir(checkpoint_dir)
+    
+    if best:
+        checkpoint_path = os.path.join(checkpoint_dir, 'best_checkpoint.pt')
+        print(f"Saved best model to {checkpoint_path}")
+    else:
+        checkpoint_path = os.path.join(checkpoint_dir, 'checkpoint.pt')
+        print(f"Savied model (non-best) to {checkpoint_path}")
+    
+    torch.save(model.state_dict(), checkpoint_path)
 
 def load_model_from_checkpoint(args, best):
     # Load model from a checkpoint
-    pass
+    model = initialize_model(args)
+    if best:
+        checkpoint_path = os.path.join(args.checkpoint_dir, 'best_checkpoint.pt')
+    else:
+        checkpoint_path = os.path.join(args.checkpoint_dir, 'checkpoint.pt')
+
+    print(f"loading model from {checkpoint_path}")
+    model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
+    
+    return model
 
 def initialize_optimizer_and_scheduler(args, model, epoch_length):
     optimizer = initialize_optimizer(args, model)
