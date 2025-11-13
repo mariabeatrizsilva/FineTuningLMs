@@ -8,7 +8,7 @@ import numpy as np
 import wandb
 
 from t5_utils import initialize_model, initialize_optimizer_and_scheduler, save_model, load_model_from_checkpoint, setup_wandb
-from transformers import GenerationConfig
+from transformers import GenerationConfig, T5TokenizerFast
 from load_data import load_t5_data
 from utils import compute_metrics, save_queries_and_records
 
@@ -143,7 +143,52 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
     '''
     # TODO
     model.eval()
-    return 0, 0, 0, 0, 0
+    total_loss = 0
+    total_tokens = 0
+    criterion = nn.CrossEntropyLoss()
+
+    generated_queries = []
+    tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
+
+    with torch.no_grad():
+    # loop over examples in each batch, get logits, compute metrics
+        for encoder_input, encoder_mask, decoder_input, decoder_targets, _ in tqdm(dev_loader):
+            encoder_input = encoder_input.to(DEVICE)
+            encoder_mask = encoder_mask.to(DEVICE)
+            decoder_input = decoder_input.to(DEVICE)
+            decoder_targets = decoder_targets.to(DEVICE)
+
+            outputs = model(
+                input_ids=encoder_input,
+                attention_mask=encoder_mask,
+                decoder_input_ids=decoder_input
+            )
+            logits = outputs['logits']
+
+            non_pad = decoder_targets != PAD_IDX
+            loss = criterion(logits[non_pad], decoder_targets[non_pad])
+            num_tokens = torch.sum(non_pad).item()
+            total_loss += loss.item() * num_tokens
+            total_tokens += num_tokens
+
+            generated = model.generate(
+                input_ids=encoder_input,
+                attention_mask=encoder_mask,
+                max_length=128,
+                num_beams=4,
+                early_stopping=True
+            )
+
+            for output in generated:
+                sql_query = tokenizer.decode(output, skip_special_tokens=True)
+                generated_queries.append(sql_query)
+
+    save_queries_and_records(generated_queries, model_sql_path, model_record_path)
+    sql_em, record_em, record_f1, model_error_msgs = compute_metrics(gt_sql_pth, model_sql_path, gt_record_path, model_record_path)
+    eval_loss = total_loss / total_tokens if total_tokens > 0 else 0
+    error_rate = len(model_error_msgs) / len(generated_queries) if len(generated_queries) > 0 else 0
+
+    return eval_loss, record_f1, record_em, sql_em, error_rate
         
 def test_inference(args, model, test_loader, model_sql_path, model_record_path):
     '''
