@@ -26,16 +26,53 @@ class T5Dataset(Dataset):
               T5Tokenizer should serve that purpose.
             * Class behavior should be different on the test set.
         '''
-        # TODO
+        tokenizer_checkpoint = 'google-t5/t5-small'
+        self.split = split
+        self.data_folder = data_folder
+        tokenizer = T5TokenizerFast.from_pretrained(tokenizer_checkpoint)
+        self.process_data(data_folder, split, tokenizer)
 
     def process_data(self, data_folder, split, tokenizer):
-        # TODO
+        nl_queries = load_lines(os.path.join(data_folder, f'{split}.nl'))
+        if split != 'test':
+            sql_queries = load_lines(os.path.join(data_folder, f'{split}.sql'))
+        else:
+            sql_queries = None
+        
+        # Store tokenized data
+        self.encoder_inputs = []
+        self.decoder_inputs = []
+        self.decoder_targets = []
+
+        for i, nl_query in enumerate(nl_queries):
+            # tokenize nl query and save to encoder 
+            enc_tokens = tokenizer(nl_query, return_tensors='pt') # pt -> pytorch output
+            self.encoder_inputs.append(enc_tokens['input_ids'].squeeze(0))
+            
+            # tokenize sql query --> add to decoder 
+            if sql_queries is not None:
+                sql_query = sql_queries[i]
+                dec_input = '<extra_id_0>' + sql_query # extra_id_0 is built in special token in T5's vocab! allows us to shift decoder stuff for targets
+                dec_tokens = tokenizer(dec_input, return_tensors='pt')
+                dec_ids = dec_tokens['input_ids'].squeeze(0)
+
+                # targets are shifted by 1
+                self.decoder_inputs.append(dec_ids[:-1])  # decoder inputs are 0-n-1
+                self.decoder_targets.append(dec_ids[1:])  # targets are 1 to n
+
     
     def __len__(self):
-        # TODO
+        return len(self.encoder_inputs)
 
     def __getitem__(self, idx):
-        # TODO
+        if self.split == 'test':
+            return self.encoder_inputs[idx]
+        else:
+            return (
+                self.encoder_inputs[idx],
+                self.decoder_inputs[idx],
+                self.decoder_targets[idx]
+            )
 
 def normal_collate_fn(batch):
     '''
