@@ -192,28 +192,22 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
                 sql_query = tokenizer.decode(output, skip_special_tokens=True)
                 generated_queries.append(sql_query)
 
-            # After generation, add:
-            if len(generated_queries) <= 10:
-                print(f"\n=== Example {len(generated_queries)} ===")
-                print(f"Generated SQL: {sql_query}")
-                # Execute to see the error
-                import sqlite3
-                conn = sqlite3.connect('data/flight_database.db')
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute(sql_query)
-                    print("✓ Valid SQL")
-                except Exception as e:
-                    print(f"✗ SQL Error: {e}")
-                conn.close()
-
-                # if len(generated_queries) <= 5:
-                #     print(f"\nGenerated query {len(generated_queries)}:")
-                #     print(f"  {sql_query}")
-
     save_queries_and_records(generated_queries, model_sql_path, model_record_path)
     sql_em, record_em, record_f1, model_error_msgs = compute_metrics(gt_sql_pth, model_sql_path, gt_record_path, model_record_path)
-    error_rate = len(model_error_msgs) / len(generated_queries) if len(generated_queries) > 0 else 0
+    
+    # DEBUG: Print actual errors
+    print(f"\n=== DEBUGGING SQL ERRORS ===")
+    print(f"Total queries: {len(generated_queries)}")
+    print(f"Total errors: {len(model_error_msgs)}")
+    print(f"\nFirst 5 error messages:")
+    for i, error in enumerate(model_error_msgs[:5]):
+        if error:  # Only print non-empty errors
+            print(f"\nError {i+1}: {error}")
+            print(f"Query {i+1}: {generated_queries[i][:100]}...")
+
+    actual_errors = [e for e in model_error_msgs if e]
+    error_rate = len(actual_errors) / len(generated_queries) if len(generated_queries) > 0 else 0
+
 
     return eval_loss, record_f1, record_em, sql_em, error_rate
         
