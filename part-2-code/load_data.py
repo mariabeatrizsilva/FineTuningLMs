@@ -47,16 +47,16 @@ class T5Dataset(Dataset):
 
         for i, nl_query in enumerate(nl_queries):
             # tokenize nl query and save to encoder 
-            enc_tokens = tokenizer(nl_query, return_tensors='pt') # pt -> pytorch output
+            nl_query_prefixed = f"translate English to SQL: {nl_query}"
+            enc_tokens = tokenizer(nl_query_prefixed, return_tensors='pt')
             self.encoder_inputs.append(enc_tokens['input_ids'].squeeze(0))
-            
             # tokenize sql query --> add to decoder 
             if sql_queries is not None:
-                sql_query = sql_queries[i]
-                dec_input = START_TOKEN + sql_query # shifted decoder stuff for targets
+                # preprocess SQL before tokenizing
+                sql_query = normalize_sql(sql_queries[i])
+                dec_input = START_TOKEN + sql_query
                 dec_tokens = tokenizer(dec_input, return_tensors='pt')
                 dec_ids = dec_tokens['input_ids'].squeeze(0)
-
                 # targets are shifted by 1
                 self.decoder_inputs.append(dec_ids[:-1])  # decoder inputs are 0-n-1
                 self.decoder_targets.append(dec_ids[1:])  # targets are 1 to n
@@ -160,3 +160,13 @@ def load_prompting_data(data_folder):
     test_x = load_lines(os.path.join(data_folder, 'test.nl'))
 
     return train_x, train_y, dev_x, dev_y, test_x
+
+def normalize_sql(sql_query):
+    """Normalize SQL queries for better learning"""
+    sql = sql_query.strip()
+    # Standardize whitespace
+    sql = ' '.join(sql.split())
+    # Lowercase keywords (optional, depends on your DB)
+    # Add any domain-specific normalizations
+    return sql
+

@@ -21,15 +21,15 @@ def initialize_model(args):
     from scratch.
     '''
     if args.finetune:
-        print("loading pretrained model")
+        print("INITIALIZE_MODEL: loading pretrained model")
         model = T5ForConditionalGeneration.from_pretrained(MODEL)
     else:
-        print("loading not pretrained model")
+        print("INITIALIZE_MODEL: loading not pretrained model")
         config = T5Config.from_pretrained(MODEL)
         model = T5ForConditionalGeneration(config)
 
     model = model.to(DEVICE)
-    print(f"model loaded on {DEVICE}")
+    print(f"INITIALIZE_MODEL: model loaded on {DEVICE}")
     return model
 
 def mkdir(dirpath):
@@ -45,10 +45,10 @@ def save_model(checkpoint_dir, model, best):
     
     if best:
         checkpoint_path = os.path.join(checkpoint_dir, 'best_checkpoint.pt')
-        print(f"Saved best model to {checkpoint_path}")
+        print(f"SAVE_MODEL: saved best model to {checkpoint_path}")
     else:
         checkpoint_path = os.path.join(checkpoint_dir, 'checkpoint.pt')
-        print(f"Savied model (non-best) to {checkpoint_path}")
+        print(f"SAVE_MODEL: saved model (non-best) to {checkpoint_path}")
     
     torch.save(model.state_dict(), checkpoint_path)
 
@@ -60,7 +60,7 @@ def load_model_from_checkpoint(args, best):
     else:
         checkpoint_path = os.path.join(args.checkpoint_dir, 'checkpoint.pt')
 
-    print(f"loading model from {checkpoint_path}")
+    print(f"LOAD_MODEL: loading model from {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
     
     return model
