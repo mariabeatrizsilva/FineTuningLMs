@@ -13,6 +13,8 @@ from load_data import load_t5_data
 from utils import compute_metrics, save_queries_and_records
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print(f"Using DEVICE {DEVICE}")
+
 PAD_IDX = 0
 
 def get_args():
@@ -54,7 +56,9 @@ def get_args():
 def train(args, model, train_loader, dev_loader, optimizer, scheduler):
     print("TRAIN: starting training")
     best_f1 = -1
-    epochs_since_improvement = 0
+    best_f1_epoch = -1
+    eval_epoch_number = 3 # how often we eval
+    epochs_since_last_full_eval = 0
 
     model_type = 'ft' if args.finetune else 'scr'
     checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', args.experiment_name)
@@ -72,34 +76,51 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
 
         eval_loss, record_f1, record_em, sql_em, error_rate = eval_epoch(args, model, dev_loader,
                                                                          gt_sql_path, model_sql_path,
-                                                                         gt_record_path, model_record_path)
-        print(f"Epoch {epoch}: Dev loss: {eval_loss}, Record F1: {record_f1}, Record EM: {record_em}, SQL EM: {sql_em}")
-        print(f"Epoch {epoch}: {error_rate*100:.2f}% of the generated outputs led to SQL errors")
+                                                                         gt_record_path, model_record_path, skip_generation = True)
+        # print(f"Epoch {epoch}: Dev loss: {eval_loss}, Record F1: {record_f1}, Record EM: {record_em}, SQL EM: {sql_em}")
+        # print(f"Epoch {epoch}: {error_rate*100:.2f}% of the generated outputs led to SQL errors")
 
-        if args.use_wandb:
-            result_dict = {
-                'train/loss' : tr_loss,
-                'dev/loss' : eval_loss,
-                'dev/record_f1' : record_f1,
-                'dev/record_em' : record_em,
-                'dev/sql_em' : sql_em,
-                'dev/error_rate' : error_rate,
-            }
-            wandb.log(result_dict, step=epoch)
+        do_full_eval = (epoch % best_f1_epoch == 0) or (epoch == args.max_n_epochs - 1)
 
-        if record_f1 > best_f1:
-            best_f1 = record_f1
-            epochs_since_improvement = 0
-        else:
-            epochs_since_improvement += 1
+        if do_full_eval:
+            print(f"Epoch {epoch}: Running full evaluation with SQL generation...")
+            eval_loss, record_f1, record_em, sql_em, error_rate = eval_epoch(
+                args, model, dev_loader,
+                gt_sql_path, model_sql_path,
+                gt_record_path, model_record_path,
+                skip_generation=False
+            )
+            print(f"Epoch {epoch}: Dev loss: {eval_loss}, Record F1: {record_f1}, Record EM: {record_em}, SQL EM: {sql_em}")
+            print(f"Epoch {epoch}: {error_rate*100:.2f}% of the generated outputs led to SQL errors")
+
+
+            if args.use_wandb:
+                result_dict = {
+                    'train/loss' : tr_loss,
+                    'dev/loss' : eval_loss,
+                    'dev/record_f1' : record_f1,
+                    'dev/record_em' : record_em,
+                    'dev/sql_em' : sql_em,
+                    'dev/error_rate' : error_rate,
+                }
+                wandb.log(result_dict, step=epoch)
+
+            if record_f1 > best_f1:
+                best_f1 = record_f1
+                best_f1_epoch = epoch
+                epochs_since_last_full_eval = 0
+                save_model(checkpoint_dir, model, best=True)
+                print(f"  → New best F1: {record_f1:.4f} at epoch {epoch}")
+            else:
+                epochs_since_last_full_eval += 1
+
+            if epochs_since_last_full_eval >= args.patience_epochs:
+                actual_epochs_waited = epochs_since_last_full_eval * eval_epoch_number  # Since we eval every 3 epochs
+                print(f"Early stopping: No F1 improvement for {epochs_since_last_full_eval} full evaluations (~{actual_epochs_waited} epochs)")
+                break
 
         save_model(checkpoint_dir, model, best=False)
-        if epochs_since_improvement == 0:
-            save_model(checkpoint_dir, model, best=True)
-
-        if epochs_since_improvement >= args.patience_epochs:
-            break
-    print("TRAIN: done training")
+    print(f"TRAIN: done training; best f1 is {best_f1} at epoch {best_f1_epoch}")
 
 def train_epoch(args, model, train_loader, optimizer, scheduler):
     model.train()
@@ -154,7 +175,6 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
     tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
 
     with torch.no_grad():
-    # loop over examples in each batch, get logits, compute metrics
         for encoder_input, encoder_mask, decoder_input, decoder_targets, initial_decoder_input in tqdm(dev_loader):
             encoder_input = encoder_input.to(DEVICE)
             encoder_mask = encoder_mask.to(DEVICE)
@@ -174,42 +194,67 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
             num_tokens = torch.sum(non_pad).item()
             total_loss += loss.item() * num_tokens
             total_tokens += num_tokens
-            eval_loss = total_loss / total_tokens if total_tokens > 0 else 0
 
-            if skip_generation:
-                return eval_loss, 0.0, 0.0, 0.0, 0.0
+            if not skip_generation:
+                generated = model.generate(
+                    input_ids=encoder_input,
+                    attention_mask=encoder_mask,
+                    decoder_input_ids=initial_decoder_input,
+                    max_length=300,
+                    num_beams=4,
+                    early_stopping=True
+                )
 
-            generated = model.generate(
-                input_ids=encoder_input,
-                attention_mask=encoder_mask,
-                decoder_input_ids=initial_decoder_input,
-                max_length=300,
-                num_beams=4,
-                early_stopping=True
-            )
+                for output in generated:
+                    sql_query = tokenizer.decode(output, skip_special_tokens=True)
+                    generated_queries.append(sql_query)
 
-            for output in generated:
-                sql_query = tokenizer.decode(output, skip_special_tokens=True)
-                generated_queries.append(sql_query)
+    eval_loss = total_loss / total_tokens if total_tokens > 0 else 0
 
+    if skip_generation:
+        return eval_loss, 0.0, 0.0, 0.0, 0.0
+    
     save_queries_and_records(generated_queries, model_sql_path, model_record_path)
     sql_em, record_em, record_f1, model_error_msgs = compute_metrics(gt_sql_pth, model_sql_path, gt_record_path, model_record_path)
-    
-    # DEBUG: Print actual errors
-    print(f"\n=== DEBUGGING SQL ERRORS ===")
-    print(f"Total queries: {len(generated_queries)}")
-    print(f"Total errors: {len(model_error_msgs)}")
-    print(f"\nFirst 5 error messages:")
-    for i, error in enumerate(model_error_msgs[:5]):
-        if error:  # Only print non-empty errors
-            print(f"\nError {i+1}: {error}")
-            print(f"Query {i+1}: {generated_queries[i][:100]}...")
-
     actual_errors = [e for e in model_error_msgs if e]
     error_rate = len(actual_errors) / len(generated_queries) if len(generated_queries) > 0 else 0
 
+    # DEBUG: Print actual errors
+    print(f"\n=== DEBUGGING SQL ERRORS ===")
+    print(f"Total queries: {len(generated_queries)}")
+    print(f"Total errors: {len(actual_errors)}")
+    print(f"Error rate: {error_rate*100:.2f}%\n")
+    
+    if len(actual_errors) <= 0:
+        return eval_loss, record_f1, record_em, sql_em, error_rate
+    
+    # ✓ FIXED: Group errors properly
+    error_types = {}
+    for i, error in enumerate(model_error_msgs):
+        if error:
+            error_type = error.split(':')[0] if ':' in error else 'Unknown'
+            if error_type not in error_types:
+                error_types[error_type] = []
+            error_types[error_type].append((i, error, generated_queries[i]))  # ✓ FIXED INDENTATION
+    
+    # Print by error type
+    for error_type, errors in error_types.items():
+        print(f"\n--- {error_type} ({len(errors)} occurrences) ---")
+        # Print first 3 examples of each error type
+        for idx, (query_num, error_msg, query) in enumerate(errors[:3]):
+            print(f"\nExample {idx+1} (Query #{query_num}):")
+            print(f"Error: {error_msg}")
+            print(f"Query: {query}")
+            print(f"Query length: {len(query)} characters")
+            print("-" * 80)
+        
+        if len(errors) > 3:
+            print(f"... and {len(errors) - 3} more {error_type} errors")
+    
+    print(f"\n{'='*80}\n")
 
     return eval_loss, record_f1, record_em, sql_em, error_rate
+
         
 def test_inference(args, model, test_loader, model_sql_path, model_record_path):
     '''

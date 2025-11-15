@@ -23,6 +23,18 @@ def initialize_model(args):
     if args.finetune:
         print("INITIALIZE_MODEL: loading pretrained model")
         model = T5ForConditionalGeneration.from_pretrained(MODEL)
+        num_layers_to_freeze = 6
+            
+        # Freeze encoder layers
+        for i in range(num_layers_to_freeze):
+            for param in model.encoder.block[i].parameters():
+                param.requires_grad = False
+            
+        # Freeze decoder layers
+        # for i in range(num_layers_to_freeze):
+        #     for param in model.decoder.block[i].parameters():
+        #         param.requires_grad = False
+
     else:
         print("INITIALIZE_MODEL: loading not pretrained model")
         config = T5Config.from_pretrained(MODEL)

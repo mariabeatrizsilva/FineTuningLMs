@@ -166,7 +166,5 @@ def normalize_sql(sql_query):
     sql = sql_query.strip()
     # Standardize whitespace
     sql = ' '.join(sql.split())
-    # Lowercase keywords (optional, depends on your DB)
-    # Add any domain-specific normalizations
     return sql
 
