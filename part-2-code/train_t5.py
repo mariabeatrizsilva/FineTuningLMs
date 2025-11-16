@@ -228,30 +228,58 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
     if len(actual_errors) <= 0:
         return eval_loss, record_f1, record_em, sql_em, error_rate
     
-    # ✓ FIXED: Group errors properly
-    error_types = {}
-    for i, error in enumerate(model_error_msgs):
-        if error:
-            error_type = error.split(':')[0] if ':' in error else 'Unknown'
-            if error_type not in error_types:
-                error_types[error_type] = []
-            error_types[error_type].append((i, error, generated_queries[i]))  # ✓ FIXED INDENTATION
-    
-    # Print by error type
-    for error_type, errors in error_types.items():
-        print(f"\n--- {error_type} ({len(errors)} occurrences) ---")
-        # Print first 3 examples of each error type
-        for idx, (query_num, error_msg, query) in enumerate(errors[:3]):
-            print(f"\nExample {idx+1} (Query #{query_num}):")
-            print(f"Error: {error_msg}")
-            print(f"Query: {query}")
-            print(f"Query length: {len(query)} characters")
+    print(f"\n=== First 10 Errors (Raw) ===")
+    error_count = 0
+    for i, error_msg in enumerate(model_error_msgs):
+        if error_msg and error_count < 10:  # Show first 10 errors
+            print(f"\n--- Error {error_count + 1} (Query #{i}) ---")
+            print(f"Error message: {error_msg}")
+            print(f"Generated query: {generated_queries[i]}")
+            print(f"Query length: {len(generated_queries[i])} characters")
             print("-" * 80)
-        
-        if len(errors) > 3:
-            print(f"... and {len(errors) - 3} more {error_type} errors")
+            error_count += 1
+
     
-    print(f"\n{'='*80}\n")
+    error_file = model_sql_path.replace('.sql', '_errors.txt')
+    with open(error_file, 'w') as f:
+        f.write(f"Total queries: {len(generated_queries)}\n")
+        f.write(f"Queries with errors: {len(actual_errors)}\n")
+        f.write(f"Error rate: {error_rate*100:.2f}%\n\n")
+        f.write("="*80 + "\n")
+        
+        for i, error_msg in enumerate(model_error_msgs):
+            if error_msg:
+                f.write(f"\nQuery #{i}\n")
+                f.write(f"Error: {error_msg}\n")
+                f.write(f"Query: {generated_queries[i]}\n")
+                f.write(f"Length: {len(generated_queries[i])} chars\n")
+                f.write("-"*80 + "\n")
+    
+    print(f"All errors saved to: {error_file}")
+    # # ✓ FIXED: Group errors properly
+    # error_types = {}
+    # for i, error in enumerate(model_error_msgs):
+    #     if error:
+    #         error_type = error.split(':')[0] if ':' in error else 'Unknown'
+    #         if error_type not in error_types:
+    #             error_types[error_type] = []
+    #         error_types[error_type].append((i, error, generated_queries[i]))  # ✓ FIXED INDENTATION
+    
+    # # Print by error type
+    # for error_type, errors in error_types.items():
+    #     print(f"\n--- {error_type} ({len(errors)} occurrences) ---")
+    #     # Print first 3 examples of each error type
+    #     for idx, (query_num, error_msg, query) in enumerate(errors[:3]):
+    #         print(f"\nExample {idx+1} (Query #{query_num}):")
+    #         print(f"Error: {error_msg}")
+    #         print(f"Query: {query}")
+    #         print(f"Query length: {len(query)} characters")
+    #         print("-" * 80)
+        
+    #     if len(errors) > 3:
+    #         print(f"... and {len(errors) - 3} more {error_type} errors")
+    
+    # print(f"\n{'='*80}\n")
 
     return eval_loss, record_f1, record_em, sql_em, error_rate
 
@@ -331,7 +359,7 @@ def main():
     model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_test.sql')
     model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_test.pkl')
     # WARNING : We don't need inference for now <3 
-    #  test_inference(args, model, test_loader, model_sql_path, model_record_path)
+    test_inference(args, model, test_loader, model_sql_path, model_record_path)
 
 if __name__ == "__main__":
     main()
