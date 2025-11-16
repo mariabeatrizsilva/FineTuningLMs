@@ -80,7 +80,7 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
         # print(f"Epoch {epoch}: Dev loss: {eval_loss}, Record F1: {record_f1}, Record EM: {record_em}, SQL EM: {sql_em}")
         # print(f"Epoch {epoch}: {error_rate*100:.2f}% of the generated outputs led to SQL errors")
 
-        do_full_eval = (epoch % best_f1_epoch == 0) or (epoch == args.max_n_epochs - 1)
+        do_full_eval = (epoch % eval_epoch_number == 0) or (epoch == args.max_n_epochs - 1)
 
         if do_full_eval:
             print(f"Epoch {epoch}: Running full evaluation with SQL generation...")
@@ -200,7 +200,7 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
                     input_ids=encoder_input,
                     attention_mask=encoder_mask,
                     decoder_input_ids=initial_decoder_input,
-                    max_length=300,
+                    max_length=512,
                     num_beams=4,
                     early_stopping=True
                 )
@@ -279,7 +279,7 @@ def test_inference(args, model, test_loader, model_sql_path, model_record_path):
                 input_ids=encoder_input,
                 attention_mask=encoder_mask,
                 decoder_input_ids=initial_decoder_input,
-                max_length=300,
+                max_length=512,
                 num_beams=4,
                 early_stopping=True
             )
