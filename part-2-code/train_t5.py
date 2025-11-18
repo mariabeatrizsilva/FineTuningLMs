@@ -358,7 +358,6 @@ def main():
     # Test set
     model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_test.sql')
     model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_test.pkl')
-    # WARNING : We don't need inference for now <3 
     test_inference(args, model, test_loader, model_sql_path, model_record_path)
 
 if __name__ == "__main__":
