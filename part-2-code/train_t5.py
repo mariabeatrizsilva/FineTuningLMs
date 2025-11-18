@@ -57,7 +57,7 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
     print("TRAIN: starting training")
     best_f1 = -1
     best_f1_epoch = -1
-    eval_epoch_number = 3 # how often we eval
+    eval_epoch_number = 5 # how often we eval
     epochs_since_last_full_eval = 0
 
     model_type = 'ft' if args.finetune else 'scr'
@@ -119,7 +119,7 @@ def train(args, model, train_loader, dev_loader, optimizer, scheduler):
                 print(f"Early stopping: No F1 improvement for {epochs_since_last_full_eval} full evaluations (~{actual_epochs_waited} epochs)")
                 break
 
-        save_model(checkpoint_dir, model, best=False)
+        # save_model(checkpoint_dir, model, best=False)
     print(f"TRAIN: done training; best f1 is {best_f1} at epoch {best_f1_epoch}")
 
 def train_epoch(args, model, train_loader, optimizer, scheduler):
@@ -201,6 +201,7 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
                     attention_mask=encoder_mask,
                     decoder_input_ids=initial_decoder_input,
                     max_length=512,
+                    repetition_penalty=1.2,
                     num_beams=4,
                     early_stopping=True
                 )
@@ -256,30 +257,6 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
                 f.write("-"*80 + "\n")
     
     print(f"All errors saved to: {error_file}")
-    # # ✓ FIXED: Group errors properly
-    # error_types = {}
-    # for i, error in enumerate(model_error_msgs):
-    #     if error:
-    #         error_type = error.split(':')[0] if ':' in error else 'Unknown'
-    #         if error_type not in error_types:
-    #             error_types[error_type] = []
-    #         error_types[error_type].append((i, error, generated_queries[i]))  # ✓ FIXED INDENTATION
-    
-    # # Print by error type
-    # for error_type, errors in error_types.items():
-    #     print(f"\n--- {error_type} ({len(errors)} occurrences) ---")
-    #     # Print first 3 examples of each error type
-    #     for idx, (query_num, error_msg, query) in enumerate(errors[:3]):
-    #         print(f"\nExample {idx+1} (Query #{query_num}):")
-    #         print(f"Error: {error_msg}")
-    #         print(f"Query: {query}")
-    #         print(f"Query length: {len(query)} characters")
-    #         print("-" * 80)
-        
-    #     if len(errors) > 3:
-    #         print(f"... and {len(errors) - 3} more {error_type} errors")
-    
-    # print(f"\n{'='*80}\n")
 
     return eval_loss, record_f1, record_em, sql_em, error_rate
 
@@ -308,6 +285,7 @@ def test_inference(args, model, test_loader, model_sql_path, model_record_path):
                 attention_mask=encoder_mask,
                 decoder_input_ids=initial_decoder_input,
                 max_length=512,
+                repetition_penalty=1.2,
                 num_beams=4,
                 early_stopping=True
             )
