@@ -1,4 +1,4 @@
-### Fine-Tuning Language Models (FineTuningLMs)  (done as part of Eunsol Choi's NLP Course at NYU)
+# Fine-Tuning Language Models (FineTuningLMs)  (done as part of Eunsol Choi's NLP Course at NYU)
 
 This repository contains code, notebooks, and scripts dedicated to fine-tuning large language models (LLMs) and smaller pre-trained language models for various Natural Language Processing (NLP) tasks.
 ---
